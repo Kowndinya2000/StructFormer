@@ -2,7 +2,10 @@ experiment_dir: ../../experiments/${env:DATETIME}
 dataset_base_dir: ???
 dataset:
   dirs:
-    - ${dataset_base_dir}/examples_line_new_objects/result
+    # - ${dataset_base_dir}/examples_line_new_objects/result
+    - "/media/exx/T7 Shield/ICLR23/LGMCTS-D/output/struct_diffusion/struct_rearrange/line/result"
   index_dirs:
-    - index_42k
-  vocab_dir: ${dataset_base_dir}/type_vocabs_coarse.json
+    # - index_42k
+    - index
+  # vocab_dir: ${dataset_base_dir}/type_vocabs_coarse.json
+  vocab_dir: "/media/exx/T7 Shield/ICLR23/LGMCTS-D/output/struct_diffusion/struct_rearrange/line/type_vocabs_coarse.json"

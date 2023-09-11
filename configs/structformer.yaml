@@ -1,17 +1,17 @@
 random_seed: 1
-device: 0
+device: cpu
 
 obj_xytheta_relative: False
 save_model: True
 save_best_model: True
 
 dataset:
-  batch_size: 32
+  batch_size: 2
   max_num_shape_parameters: 5
-  max_num_objects: 7
-  max_num_other_objects: 5
-  max_num_rearrange_features: 0
-  max_num_anchor_features: 0
+  max_num_objects: 9
+  max_num_other_objects: 10
+  max_num_rearrange_features: 5 
+  max_num_anchor_features: 3
   num_pts: 1024
   num_workers: 4
   pin_memory: True
@@ -31,7 +31,7 @@ model:
 
 training:
   learning_rate: 0.0001
-  max_epochs: 200
+  max_epochs: 7
   l2: 0.0001
   lr_restart: 3000
   warmup: 10

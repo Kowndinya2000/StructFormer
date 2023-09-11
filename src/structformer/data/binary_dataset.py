@@ -106,23 +106,24 @@ class BinaryDataset(torch.utils.data.Dataset):
         xyz_img[depth_img > 0, :] += additive_noise[depth_img > 0, :]
         return xyz_img
 
-    def _get_rgb(self, h5, idx, ee=True):
+    def _get_rgb(self, h5, idx, ee=False):
         RGB = "ee_rgb" if ee else "rgb"
         rgb1 = img.PNGToNumpy(h5[RGB][idx])[:, :, :3] / 255.  # remove alpha
         return rgb1
 
-    def _get_depth(self, h5, idx, ee=True):
+    def _get_depth(self, h5, idx, ee=False):
         DEPTH = "ee_depth" if ee else "depth"
 
-    def _get_images(self, h5, idx, ee=True):
+    def _get_images(self, h5, idx, ee=False):
         if ee:
             RGB, DEPTH, SEG = "ee_rgb", "ee_depth", "ee_seg"
             DMIN, DMAX = "ee_depth_min", "ee_depth_max"
         else:
             RGB, DEPTH, SEG = "rgb", "depth", "seg"
             DMIN, DMAX = "depth_min", "depth_max"
-        dmin = h5[DMIN][idx]
-        dmax = h5[DMAX][idx]
+        idx = 1 if idx > 1 else idx
+        dmin = h5[DMIN][0]
+        dmax = h5[DMAX][0]
         rgb1 = img.PNGToNumpy(h5[RGB][idx])[:, :, :3] / 255.  # remove alpha
         depth1 = h5[DEPTH][idx] / 20000. * (dmax - dmin) + dmin
         seg1 = img.PNGToNumpy(h5[SEG][idx])
@@ -134,10 +135,10 @@ class BinaryDataset(torch.utils.data.Dataset):
         if self.data_augmentation:
             depth1 = self.add_noise_to_depth(depth1)
 
-        xyz1 = cam.compute_xyz(depth1, camera)
-        if self.data_augmentation:
-            xyz1 = self.add_noise_to_xyz(xyz1, depth1)
-
+        # xyz1 = cam.compute_xyz(depth1, camera)
+        xyz1 = h5["scene_point_cloud"][idx]
+        # if self.data_augmentation:
+        #     xyz1 = self.add_noise_to_xyz(xyz1, depth1)
         # Transform the point cloud
         # Here it is...
         # CAM_POSE = "ee_cam_pose" if ee else "cam_pose"
@@ -151,7 +152,7 @@ class BinaryDataset(torch.utils.data.Dataset):
         # Get transformed point cloud
         h, w, d = xyz1.shape
         xyz1 = xyz1.reshape(h * w, -1)
-        xyz1 = trimesh.transform_points(xyz1, cam_pose)
+        # xyz1 = trimesh.transform_points(xyz1, cam_pose)
         xyz1 = xyz1.reshape(h, w, -1)
 
         scene1 = rgb1, depth1, seg1, valid1, xyz1
@@ -192,7 +193,7 @@ class BinaryDataset(torch.utils.data.Dataset):
         ids = self._get_ids(h5)
         # moved_objs = h5['moved_objs'][()].split(',')
         all_objs = sorted([o for o in ids.keys() if "object_" in o])
-        goal_specification = json.loads(str(np.array(h5["goal_specification"])))
+        goal_specification = json.loads(h5["goal_specification"][()].decode("utf-8"))
         num_rearrange_objs = len(goal_specification["rearrange"]["objects"])
         num_other_objs = len(goal_specification["anchor"]["objects"] + goal_specification["distract"]["objects"])
 
@@ -218,8 +219,9 @@ class BinaryDataset(torch.utils.data.Dataset):
         forward_step_t = num_rearrange_objs - step_t
 
         # getting scene images and point clouds
-        scene = self._get_images(h5, step_t, ee=True)
+        scene = self._get_images(h5, step_t, ee=False)
         rgb, depth, seg, valid, xyz = scene
+        
 
         query_obj = all_objs[forward_step_t]
         anchor_obj = None
@@ -369,7 +371,7 @@ class BinaryDataset(torch.utils.data.Dataset):
             # plt.imshow(rgb)
             # plt.show()
             #
-            # init_scene = self._get_images(h5, 0, ee=True)
+            # init_scene = self._get_images(h5, 0, ee=False)
             # plt.figure()
             # plt.imshow(init_scene[0])
             # plt.show()
@@ -407,7 +409,7 @@ class BinaryDataset(torch.utils.data.Dataset):
         ids = self._get_ids(h5)
         # moved_objs = h5['moved_objs'][()].split(',')
         all_objs = sorted([o for o in ids.keys() if "object_" in o])
-        goal_specification = json.loads(str(np.array(h5["goal_specification"])))
+        goal_specification = json.loads(h5["goal_specification"][()].decode("utf-8"))
         num_rearrange_objs = len(goal_specification["rearrange"]["objects"])
         num_other_objs = len(goal_specification["anchor"]["objects"] + goal_specification["distract"]["objects"])
 
@@ -432,7 +434,7 @@ class BinaryDataset(torch.utils.data.Dataset):
 
         ###################################
         # getting initial scene images and point clouds
-        scene = self._get_images(h5, num_rearrange_objs, ee=True)
+        scene = self._get_images(h5, num_rearrange_objs, ee=False)
         rgb, depth, seg, valid, xyz = scene
 
         # getting object point clouds
@@ -520,7 +522,7 @@ class BinaryDataset(torch.utils.data.Dataset):
             # plt.imshow(rgb)
             # plt.show()
             #
-            # init_scene = self._get_images(h5, 0, ee=True)
+            # init_scene = self._get_images(h5, 0, ee=False)
             # plt.figure()
             # plt.imshow(init_scene[0])
             # plt.show()
@@ -661,7 +663,7 @@ if __name__ == "__main__":
                             max_num_rearrange_features=0,
                             max_num_anchor_features=0,
                             num_pts=1024,
-                            data_augmentation=False, debug=False)
+                            data_augmentation=False, debug=True)
 
     for i in range(0, 10):
         d = dataset.get_raw_data(i)

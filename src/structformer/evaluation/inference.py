@@ -227,7 +227,7 @@ class PointCloudRearrangement:
             imagined_obj_xyz, imagined_obj_rgb = move_one_object_pc(self.initial_xyzs["xyzs"][obj_idx],
                                                                     self.initial_xyzs["rgbs"][obj_idx],
                                                                     self.goal_poses["obj_poses"][obj_idx],
-                                                                    goal_struct_pose)
+                                                                    goal_struct_pose, euler_angles=False)
 
             if no_goal_xyzs_yet:
                 self.goal_xyzs["xyzs"].append(imagined_obj_xyz)

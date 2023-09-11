@@ -136,7 +136,7 @@ class Tokenizer:
             else:
                 raise TypeError("The dtype of the vocab cannot be handled: {}".format(vocab))
 
-        print("The vocab has {} tokens: {}".format(len(self.vocab), self.vocab))
+        # print("The vocab has {} tokens: {}".format(len(self.vocab), self.vocab))
 
     def build_object_position_vocabs(self):
         print("\nBuild vocabs for object position")
@@ -149,7 +149,7 @@ class Tokenizer:
             min_value, max_value, num_bins = self.type_vocabs[typ]
             for i in range(num_bins):
                 self.object_position_vocabs[typ]["{}".format(i)] = len(self.object_position_vocabs[typ])
-            print("The {} vocab has {} tokens: {}".format(typ, len(self.object_position_vocabs[typ]), self.object_position_vocabs[typ]))
+            # print("The {} vocab has {} tokens: {}".format(typ, len(self.object_position_vocabs[typ]), self.object_position_vocabs[typ]))
 
     def get_object_position_vocab_sizes(self):
         return len(self.object_position_vocabs["position_x"]), len(self.object_position_vocabs["position_y"]), len(self.object_position_vocabs["rotation"])

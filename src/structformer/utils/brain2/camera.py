@@ -19,9 +19,9 @@ from structformer.utils.brain2.pose import make_pose
 
 def get_camera_from_h5(h5):
     """ Simple reference to help make these """
-    proj_near = h5['cam_near'][()]
-    proj_far = h5['cam_far'][()]
-    proj_fov = h5['cam_fov'][()]
+    proj_near = h5['proj_near'][()]
+    proj_far = h5['proj_far'][()]
+    proj_fov = h5['proj_fov'][()]
     width = h5['cam_width'][()]
     height = h5['cam_height'][()]
     return GenericCameraReference(proj_near, proj_far, proj_fov, width, height)
@@ -152,9 +152,10 @@ def compute_xyz(depth_img, camera, visualize_xyz=False,
     input_y = input_y.flatten()
     input_z = depth_img.flatten()
     # clip points that are farther than max distance
-    input_z[input_z > max_clip_depth] = 0
+    # input_z[input_z > max_clip_depth] = 0
     output_x = (input_x * input_z - cx * input_z) / fx
     output_y = (input_y * input_z - cy * input_z) / fy
+    input_z = input_z - 994.0
     raw_pc = np.stack([output_x, output_y, input_z], -1).reshape(
         height, width, 3
     )

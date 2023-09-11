@@ -113,7 +113,8 @@ class PriorContinuousOutEncoderDecoderStructPCT6DDropoutAllObjects(torch.nn.Modu
         # type sentence, other obj pc, target object pc, struct
         self.token_type_embeddings = torch.nn.Embedding(4, 8)
         # max number of objects or max length of sentence is 7
-        self.position_embeddings = torch.nn.Embedding(7, 8)
+        # self.position_embeddings = torch.nn.Embedding(7, 8) # Adjusted by Kowndinya
+        self.position_embeddings = torch.nn.Embedding(10, 8)
 
         print(num_attention_heads)
         print(encoder_hidden_dim)

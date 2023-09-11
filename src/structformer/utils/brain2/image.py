@@ -108,9 +108,10 @@ def GetPNG(img):
     return output.getvalue()
 
 def PNGToNumpy(png):
-    stream = io.BytesIO(png)
-    im = Image.open(stream)
-    return np.array(im, dtype=np.uint8)
+    # stream = io.BytesIO(png)
+    # im = Image.open(stream)
+    # return np.array(im, dtype=np.uint8)
+    return np.array(png, dtype=np.uint8)
 
 def ConvertPNGListToNumpy(data):
     length = len(data)

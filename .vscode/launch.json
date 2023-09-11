@@ -1,0 +1,98 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "RUN SFORMER",
+            "type": "python",
+            "request": "launch",
+            "program": "run_full_pipeline.py",
+            "console": "integratedTerminal",
+            "cwd" : "${workspaceFolder}/scripts/",
+            "justMyCode": false, 
+            "args" : [
+                "--dataset_base_dir",
+                "${workspaceFolder}/data_new_objects_test_split",
+                "--object_selection_model_dir",
+                "/media/exx/T7 Shield/ICLR23/StructFormer/src/experiments/20230911-101722/model",
+                "--pose_generation_model_dir",
+                "/media/exx/T7 Shield/ICLR23/StructFormer/src/experiments/20230911-102123/model",
+                "--dirs_config",
+                "${workspaceFolder}/configs/data/circle_dirs.yaml"
+            ]
+        },
+        {
+            "name": "SFORMER LGMCTS",
+            "type": "python",
+            "request": "launch",
+            "program": "run_full_pipeline.py",
+            "console": "integratedTerminal",
+            "cwd" : "${workspaceFolder}/scripts/",
+            "justMyCode": false, 
+            "args" : [
+                "--dataset_base_dir",
+                "/media/exx/T7 Shield/ICLR23/LGMCTS-D/output/struct_diffusion/struct_rearrange",
+                "--object_selection_model_dir",
+                "${workspaceFolder}/models/object_selection_network/best_model",
+                
+                "--pose_generation_model_dir",
+                "/media/exx/T7 Shield/ICLR23/StructFormer/src/experiments/20230910-213435/best_model",
+                "--dirs_config",
+                "${workspaceFolder}/configs/data/line_dirs.yaml"
+            ]
+        },
+        {
+            "name": "TRAIN SFORMER LGMCTS",
+            "type": "python",
+            "request": "launch",
+            "program": "train_structformer.py",
+            "console": "integratedTerminal",
+            "cwd" : "${workspaceFolder}/src/structformer/training",
+            "justMyCode": false, 
+            "args" : [
+                "--dataset_base_dir",
+                "/media/exx/T7 Shield/ICLR23/LGMCTS-D/output/struct_diffusion/struct_rearrange/line",
+                "--main_config",
+                "${workspaceFolder}/configs/structformer.yaml",
+                "--dirs_config",
+                "${workspaceFolder}/configs/data/line_dirs.yaml"
+            ]
+        },
+        {
+            "name": "TRAIN OBJ SEL LGMCTS",
+            "type": "python",
+            "request": "launch",
+            "program": "train_object_selection_network.py",
+            "console": "integratedTerminal",
+            "cwd" : "${workspaceFolder}/src/structformer/training",
+            "justMyCode": false, 
+            "args" : [
+                "--dataset_base_dir",
+                "/media/exx/T7 Shield/ICLR23/LGMCTS-D/output/struct_diffusion/struct_rearrange/line",
+                "--main_config",
+                "${workspaceFolder}/configs/object_selection_network.yaml",
+                "--dirs_config",
+                "${workspaceFolder}/configs/data/line_dirs.yaml"
+            ]
+        },
+        {
+            "name": "EVAL SFORMER",
+            "type": "python",
+            "request": "launch",
+            "program": "test_structformer.py",
+            "console": "integratedTerminal",
+            "cwd" : "${workspaceFolder}/src/structformer/evaluation",
+            "justMyCode": false, 
+            "args" : [
+                "--dataset_base_dir",
+                "/media/exx/T7 Shield/ICLR23/LGMCTS-D/output/struct_diffusion/struct_rearrange/line",
+                "--model_dir",
+                "/media/exx/T7 Shield/ICLR23/StructFormer/src/experiments/20230911-150509/best_model",
+                "--dirs_config",
+                "${workspaceFolder}/configs/data/line_dirs.yaml"
+            ]
+        }
+    ]
+}

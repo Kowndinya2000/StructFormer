@@ -135,3 +135,12 @@ dmypy.json
 # Custom
 /experiments
 /models
+
+# Models 
+models 
+
+# Data
+data_new_objects_test_split
+
+# Experiments 
+src/experiments

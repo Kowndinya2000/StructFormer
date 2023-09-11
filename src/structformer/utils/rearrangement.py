@@ -459,11 +459,12 @@ def move_one_object_pc(obj_xyz, obj_rgb, object_params, struct_params=None, eule
     new_obj_xyz = trimesh.transform_points(obj_xyz, t)
 
     # rotate in place
-    R = R_obj
+    R = R_obj 
+    # R = np.eye(4)
     obj_center = np.mean(new_obj_xyz, axis=0)
     centered_obj_xyz = new_obj_xyz - obj_center
     new_centered_obj_xyz = trimesh.transform_points(centered_obj_xyz, R, translate=True)
-    new_obj_xyz = new_centered_obj_xyz + obj_center
+    new_obj_xyz = new_centered_obj_xyz + obj_center # Commented by Kowndinya for now
 
     if struct_params is not None:
         # transform to the global frame from the structure frame
@@ -692,7 +693,6 @@ def show_pcs(xyz, rgb, add_coordinate_frame=False, side_view=True, add_table=Tru
     pcd = open3d.geometry.PointCloud()
     pcd.points = open3d.utility.Vector3dVector(unordered_pc)
     pcd.colors = open3d.utility.Vector3dVector(unordered_rgb)
-
     if add_table:
         table_color = [0.7, 0.7, 0.7]
         origin = [0, -0.5, -0.03]

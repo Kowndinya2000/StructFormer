@@ -1,0 +1,54 @@
+{
+    "anchor": 
+            {
+                "objects": [
+                                {
+                                    "obj_id": 5, 
+                                    "obj_name": "letter A", 
+                                    "obj_assets": "kitting/object-template.urdf"
+                                }
+                            ]
+            }, 
+            
+    "rearrange": 
+            {
+                "combine_features_logic": "None", 
+                "count": "None", 
+                "objects": 
+                        [
+                            {
+                                "obj_id": 6, 
+                                "obj_name": "letter V", 
+                                "obj_assets": "kitting/object-template.urdf"
+                            }, 
+                            
+                            {
+                                "obj_id": 7, 
+                                "obj_name": "pentagon", 
+                                "obj_assets": "kitting/object-template.urdf"
+                            }, 
+                            
+                            {
+                                "obj_id": 8, "obj_name": "letter T", "obj_assets": "kitting/object-template.urdf"}, 
+                            {
+                                "obj_id": 9, "obj_name": "letter M", "obj_assets": "kitting/object-template.urdf"}
+                        ]
+            }, 
+    "distract": 
+            {
+                "objects": 
+                            [
+                                {"obj_id": 10, "obj_name": "letter A", "obj_assets": "kitting/object-template.urdf"}, 
+                                {"obj_id": 11, "obj_name": "letter A", "obj_assets": "kitting/object-template.urdf"}, 
+                                {"obj_id": 12, "obj_name": "L-shaped block", "obj_assets": "kitting/object-template.urdf"}, 
+                                {"obj_id": 13, "obj_name": "letter A", "obj_assets": "kitting/object-template.urdf"}, 
+                                {"obj_id": 14, "obj_name": "letter A", "obj_assets": "kitting/object-template.urdf"}, 
+                                {"obj_id": 15, "obj_name": "letter G", "obj_assets": "kitting/object-template.urdf"}, 
+                                {"obj_id": 16, "obj_name": "L-shaped block", "obj_assets": "kitting/object-template.urdf"}
+                            ]
+            }, 
+    "shape": 
+            {
+                "position": [0.36250000000000004, -0.4, 0.0]
+            }
+}

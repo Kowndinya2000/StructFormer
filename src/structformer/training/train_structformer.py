@@ -25,7 +25,13 @@ from structformer.models.pose_generation_network import PriorContinuousOutEncode
 from structformer.data.tokenizer import Tokenizer
 from structformer.utils.rearrangement import evaluate_prior_prediction, generate_square_subsequent_mask
 
-
+def dist_p2l(p, o, k):
+    """(Vectorized meethod) disance, point to line"""
+    op = p - o
+    k = np.repeat(k, [op.shape[0]]).reshape([2, -1]).T
+    op_proj = np.sum(np.multiply(op, k), axis=-1)[..., None] * k
+    op_ver = op - op_proj
+    return np.linalg.norm(op_ver, axis=-1)
 def train_model(cfg, model, data_iter, optimizer, warmup, num_epochs, device, save_best_model, grad_clipping=1.0):
 
     if save_best_model:
@@ -45,6 +51,7 @@ def train_model(cfg, model, data_iter, optimizer, warmup, num_epochs, device, sa
         predictions = defaultdict(list)
 
         with tqdm.tqdm(total=len(data_iter["train"])) as pbar:
+            pattern_dists = []
             for step, batch in enumerate(data_iter["train"]):
                 optimizer.zero_grad()
                 # input
@@ -87,6 +94,57 @@ def train_model(cfg, model, data_iter, optimizer, warmup, num_epochs, device, sa
                                       tgt_mask, start_token,
                                       struct_x_inputs, struct_y_inputs, struct_z_inputs, struct_theta_inputs,
                                       struct_position_index, struct_token_type_index, struct_pad_mask)
+                # print("Predict X Shape:", preds["obj_x_outputs"].shape)
+                # print("Predict Y Shape:", preds["obj_y_outputs"].shape)
+                # print("Predict Z Shape:", preds["obj_z_outputs"].shape)
+                # print("Predict Theta Shape:", preds["obj_theta_outputs"].shape)
+
+                # print("Prediction X:", preds["obj_x_outputs"][0])
+                # print("Prediction Y:", preds["obj_y_outputs"][0])
+                # print("Prediction Z:", preds["obj_z_outputs"][0])
+                # print("Prediction Theta:", preds["obj_theta_outputs"][0])
+
+                for num in range(cfg.dataset.batch_size):
+                    obj_poses_pattern = []
+                    for ind in range(0, cfg.dataset.max_num_objects):
+                        goal_pose = np.eye(4)
+                        goal_pose = goal_pose[:3]
+                        goal_pose[0, 3] = preds["obj_x_outputs"][ind]
+                        goal_pose[1, 3] = preds["obj_y_outputs"][ind]
+                        goal_pose[2, 3] = preds["obj_z_outputs"][ind]
+                        goal_pose[:3, :3] = preds["obj_theta_outputs"][ind].reshape(3, 3).detach().numpy() 
+                        # rotation_offset = np.transpose(obj_theta_inputs[num, ind].reshape(3, 3).detach().numpy()) @ preds["obj_theta_outputs"][ind].reshape(3, 3).detach().numpy()
+                        trans_offset = goal_pose[:3, 3] - np.array([obj_x_inputs[num, ind].detach().numpy(), obj_y_inputs[num, ind].detach().numpy(), obj_z_inputs[num, ind].detach().numpy()])
+                        # trans_offset = np.array([0., 0., 0.])
+                        # offset = np.eye(4)
+                        # offset[:3, :3] = rotation_offset
+                        # offset[:3, 3] = trans_offset
+                        # rot_new = goal_pose[:3, :3] @ rotation_offset
+                        # trans_new = goal_pose[:3, :3] @ trans_offset + goal_pose[:3, 3]
+                        # goal_pose[:3, :3] = rot_new
+                        # goal_pose[:3, 3] = trans_new 
+                        goal_pose[:3, 3] = trans_offset
+                        # + obj_theta_inputs[num, ind].reshape(3, 3).detach().numpy()
+                        assert np.allclose(np.linalg.det(goal_pose[:3, :3]), 1.0)
+                        obj_poses_pattern.append(goal_pose)
+                                                
+                    obj_poses_pattern = np.vstack(obj_poses_pattern)
+                    # get the up most and low most points first"""
+                    lo_idx = np.argmax(obj_poses_pattern[:, 1], axis=-1)
+                    hi_idx = np.argmin(obj_poses_pattern[:, 1], axis=-1)
+                    lo_pose = obj_poses_pattern[lo_idx, :2]
+                    hi_pose = obj_poses_pattern[hi_idx, :2]
+                    k = (hi_pose - lo_pose) / np.linalg.norm(hi_pose - lo_pose)
+                    o = hi_pose
+                    threshold = 0.1 
+                    dists = dist_p2l(obj_poses_pattern[:, :2], o[None, :], k[None, :])
+                    pattern_dists.append(np.max(dists))
+                    status = not (np.max(dists) > threshold)
+                    if not status:
+                        # print("Line pattern check failed!")
+                        pass
+                    # print("status:", status)
+                
 
                 loss = model.criterion(preds, targets)
                 loss.backward()
@@ -116,8 +174,9 @@ def train_model(cfg, model, data_iter, optimizer, warmup, num_epochs, device, sa
             print("Saving best model so far...")
             best_score = score
             save_model(best_model_dir, cfg, epoch, model)
-
-    return model
+    print("Max dist:", max(pattern_dists))
+    print("Min dist:", min(pattern_dists))
+    return model    
 
 
 def validate(cfg, model, data_iter, epoch, device):
@@ -377,7 +436,7 @@ def run_model(cfg):
         print("Saving model to {}".format(model_dir))
         if not os.path.exists(model_dir):
             os.makedirs(model_dir)
-        save_model(model_dir, cfg, cfg.max_epochs, model, optimizer, scheduler)
+        save_model(model_dir, cfg, cfg.training.max_epochs, model, optimizer, scheduler)
 
 
 if __name__ == "__main__":

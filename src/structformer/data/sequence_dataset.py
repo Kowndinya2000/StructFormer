@@ -118,38 +118,42 @@ class SequenceDataset(torch.utils.data.Dataset):
         small_H, small_W = (np.array([H, W]) / gp_rescale_factor).astype(int)
         additive_noise = np.random.normal(loc=0.0, scale=gp_scale, size=(small_H, small_W, C))
         additive_noise = cv2.resize(additive_noise, (W, H), interpolation=cv2.INTER_CUBIC)
-        xyz_img[depth_img > 0, :] += additive_noise[depth_img > 0, :]
+        xyz_img[depth_img.squeeze(axis=2) > 0, :] += additive_noise[depth_img.squeeze(axis=2) > 0, :]
         return xyz_img
 
-    def _get_rgb(self, h5, idx, ee=True):
+    def _get_rgb(self, h5, idx, ee=False):
         RGB = "ee_rgb" if ee else "rgb"
         rgb1 = img.PNGToNumpy(h5[RGB][idx])[:, :, :3] / 255.  # remove alpha
         return rgb1
 
-    def _get_depth(self, h5, idx, ee=True):
+    def _get_depth(self, h5, idx, ee=False):
         DEPTH = "ee_depth" if ee else "depth"
 
-    def _get_images(self, h5, idx, ee=True):
+    def _get_images(self, h5, idx, ee=False):
         if ee:
             RGB, DEPTH, SEG = "ee_rgb", "ee_depth", "ee_seg"
             DMIN, DMAX = "ee_depth_min", "ee_depth_max"
         else:
             RGB, DEPTH, SEG = "rgb", "depth", "seg"
             DMIN, DMAX = "depth_min", "depth_max"
-        dmin = h5[DMIN][idx]
-        dmax = h5[DMAX][idx]
-        rgb1 = img.PNGToNumpy(h5[RGB][idx])[:, :, :3] / 255.  # remove alpha
-        depth1 = h5[DEPTH][idx] / 20000. * (dmax - dmin) + dmin
-        seg1 = img.PNGToNumpy(h5[SEG][idx])
 
-        valid1 = np.logical_and(depth1 > 0.1, depth1 < 2.)
+        idx = 1 if idx > 1 else idx
+        dmin = h5[DMIN][0]
+        dmax = h5[DMAX][0]
+        rgb1 = img.PNGToNumpy(h5[RGB][idx])[:, :, :3] / 255.  # remove alpha
+        depth1 = h5[DEPTH][idx] / 20000. * (dmax - dmin) + dmin # Kowndinya: Changed 20000 to 1000
+        seg1 = img.PNGToNumpy(h5[SEG][idx])
+        # print('depth1:', depth1)
+        valid1 = np.logical_and(depth1 > 999, depth1 < 1001.)
+        # valid1  = np.logical_or(depth1 > 0.1, True)
 
         # proj_matrix = h5['proj_matrix'][()]
         camera = cam.get_camera_from_h5(h5)
         if self.data_augmentation:
             depth1 = self.add_noise_to_depth(depth1)
 
-        xyz1 = cam.compute_xyz(depth1, camera)
+        # xyz1 = cam.compute_xyz(depth1, camera)
+        xyz1 = h5["scene_point_cloud"][idx]
         if self.data_augmentation:
             xyz1 = self.add_noise_to_xyz(xyz1, depth1)
 
@@ -166,7 +170,7 @@ class SequenceDataset(torch.utils.data.Dataset):
         # Get transformed point cloud
         h, w, d = xyz1.shape
         xyz1 = xyz1.reshape(h * w, -1)
-        xyz1 = trimesh.transform_points(xyz1, cam_pose)
+        # xyz1 = trimesh.transform_points(xyz1, cam_pose)
         xyz1 = xyz1.reshape(h, w, -1)
 
         scene1 = rgb1, depth1, seg1, valid1, xyz1
@@ -209,12 +213,21 @@ class SequenceDataset(torch.utils.data.Dataset):
         """
 
         filename = self.arrangement_data[idx]
-
         h5 = h5py.File(filename, 'r')
         ids = self._get_ids(h5)
         # moved_objs = h5['moved_objs'][()].split(',')
         all_objs = sorted([o for o in ids.keys() if "object_" in o])
-        goal_specification = json.loads(str(np.array(h5["goal_specification"])))
+        goal_specification = json.loads(h5["goal_specification"][()].decode("utf-8"))
+
+        for object in goal_specification["anchor"]["objects"]:
+            if object in goal_specification["rearrange"]["objects"]:
+                ind_del = None
+                for i in range(len(goal_specification["rearrange"]["objects"])):
+                    if goal_specification["rearrange"]["objects"][i] == object:
+                        ind_del = i
+                        break
+                if ind_del is not None:
+                    del goal_specification["rearrange"]["objects"][ind_del]
         num_rearrange_objs = len(goal_specification["rearrange"]["objects"])
         num_other_objs = len(goal_specification["anchor"]["objects"] + goal_specification["distract"]["objects"])
 
@@ -222,7 +235,7 @@ class SequenceDataset(torch.utils.data.Dataset):
         assert num_rearrange_objs <= self.max_num_objects
         assert num_other_objs <= self.max_num_other_objects
 
-        step_t = num_rearrange_objs
+        step_t = min(1, num_rearrange_objs)
 
         target_objs = all_objs[:num_rearrange_objs]
         other_objs = all_objs[num_rearrange_objs:]
@@ -240,7 +253,7 @@ class SequenceDataset(torch.utils.data.Dataset):
 
         ###################################
         # getting scene images and point clouds
-        scene = self._get_images(h5, step_t, ee=True)
+        scene = self._get_images(h5, step_t, ee=False)
         rgb, depth, seg, valid, xyz = scene
 
         # getting object point clouds
@@ -252,11 +265,13 @@ class SequenceDataset(torch.utils.data.Dataset):
         other_obj_rgbs = []
         other_object_pad_mask = []
         for obj in all_objs:
-            obj_mask = np.logical_and(seg == ids[obj], valid)
+            obj_mask = np.logical_and(seg == ids[obj], valid) #TODO: Fix Obj_mask, for now setting it to True
             if np.sum(obj_mask) <= 0:
+                print("line 270: no points for object {}".format(obj))
                 raise Exception
             ok, obj_xyz, obj_rgb, _ = get_pts(xyz, rgb, obj_mask, num_pts=self.num_pts)
             if not ok:
+                print("line 274: no points for object {}".format(obj))
                 raise Exception
 
             if obj in target_objs:
@@ -269,19 +284,22 @@ class SequenceDataset(torch.utils.data.Dataset):
                 other_obj_rgbs.append(obj_rgb)
                 other_object_pad_mask.append(0)
             else:
+                print("line 287: object {} is not in target_objs or other_objs".format(obj))
                 raise Exception
 
         if inference_mode:
-            goal_scene = self._get_images(h5, 0, ee=True)
+            goal_scene = self._get_images(h5, 0, ee=False)
             goal_rgb, goal_depth, goal_seg, goal_valid, goal_xyz = goal_scene
             goal_obj_xyzs = []
             goal_obj_rgbs = []
             for obj in all_objs:
                 obj_mask = np.logical_and(goal_seg == ids[obj], goal_valid)
                 if np.sum(obj_mask) <= 0:
+                    print("line 298: no points for object {}".format(obj))
                     raise Exception
                 ok, obj_xyz, obj_rgb, _ = get_pts(goal_xyz, goal_rgb, obj_mask, num_pts=self.num_pts)
                 if not ok:
+                    print("line 302: no points for object {}".format(obj))
                     raise Exception
                 if obj in target_objs:
                     goal_obj_xyzs.append(obj_xyz)
@@ -443,7 +461,7 @@ class SequenceDataset(torch.utils.data.Dataset):
             # plt.imshow(rgb)
             # plt.show()
             #
-            # init_scene = self._get_images(h5, 0, ee=True)
+            # init_scene = self._get_images(h5, 0, ee=False)
             # plt.figure()
             # plt.imshow(init_scene[0])
             # plt.show()

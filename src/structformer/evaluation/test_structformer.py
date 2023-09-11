@@ -14,7 +14,16 @@ import structformer.data.sequence_dataset as prior_dataset
 import structformer.training.train_structformer as prior_model
 from structformer.utils.rearrangement import show_pcs
 from structformer.evaluation.inference import PointCloudRearrangement
+from structformer.evaluation.test_object_selection_network import ObjectSelectionInference
 
+
+def dist_p2l(p, o, k):
+    """(Vectorized meethod) disance, point to line"""
+    op = p - o
+    k = np.repeat(k, [op.shape[0]]).reshape([2, -1]).T
+    op_proj = np.sum(np.multiply(op, k), axis=-1)[..., None] * k
+    op_ver = op - op_proj
+    return np.linalg.norm(op_ver, axis=-1)
 
 def test_model(model_dir, dirs_cfg):
     prior_inference = PriorInference(model_dir, dirs_cfg, data_split="test")
@@ -144,6 +153,7 @@ def inference_beam_decoding(model_dir, dirs_cfg, beam_size=100, max_scene_decode
 
     decoded_scene_count = 0
     with tqdm.tqdm(total=len(test_dataset)) as pbar:
+        pattern_dists = []
         # for idx in np.random.choice(range(len(test_dataset)), len(test_dataset), replace=False):
         for idx in range(len(test_dataset)):
 
@@ -183,11 +193,32 @@ def inference_beam_decoding(model_dir, dirs_cfg, beam_size=100, max_scene_decode
 
             if visualize:
                 datum = beam_data[0]
-                print("#"*50)
-                print("sentence", datum["sentence"])
-                show_pcs(datum["xyzs"] + datum["other_xyzs"], datum["rgbs"] + datum["other_rgbs"],
-                         add_coordinate_frame=False, side_view=True, add_table=True)
+                # print("#"*50)
+                # print("sentence", datum["sentence"])
+                # object_selection_inference = ObjectSelectionInference(model_dir, dirs_cfg)
+                object_selection_structured_sentence = datum["sentence"][5:]
+                structure_specification_structured_sentence = datum["sentence"][:5]
+                tokenizer = Tokenizer("/media/exx/T7 Shield/ICLR23/LGMCTS-D/output/struct_diffusion/struct_rearrange/circle/type_vocabs_coarse.json")
+                object_selection_natural_sentence = tokenizer.convert_to_natural_sentence(datum["sentence"])
+                # structure_specification_natural_sentence =tokenizer.convert_structure_params_to_natural_language(structure_specification_structured_sentence)
+                # structure_specification_natural_sentence = object_selection_inference.tokenizer.convert_structure_params_to_natural_language(datum["sentence"][5:])
+                # print("natural sentence:", object_selection_natural_sentence)
+                # print("datum:", datum)
+                # print("structure specification:", structure_specification_natural_sentence)
 
+        
+
+                # show_pcs(datum["xyzs"] + datum["other_xyzs"], datum["rgbs"] + datum["other_rgbs"],
+                #          add_coordinate_frame=False, side_view=True, add_table=True)
+                # show_pcs(datum["xyzs"] + datum["other_xyzs"], datum["rgbs"] + datum["other_rgbs"],
+                #          add_coordinate_frame=True, side_view=True, add_table=True)
+                # Commenting out for now
+                show_pcs(datum["xyzs"], datum["rgbs"],
+                         add_coordinate_frame=True, side_view=False, add_table=True)
+                
+
+                show_pcs(datum["xyzs"] + datum["other_xyzs"], datum["rgbs"] + datum["other_rgbs"],
+                         add_coordinate_frame=True, side_view=False, add_table=True)
             ############################################
             # autoregressive decoding
             num_target_objects = beam_pc_rearrangements[0].num_target_objects
@@ -221,17 +252,55 @@ def inference_beam_decoding(model_dir, dirs_cfg, beam_size=100, max_scene_decode
             for bi in range(beam_size):
                 beam_pc_rearrangements[bi].set_goal_poses(beam_goal_struct_pose[bi], beam_goal_obj_poses[bi])
                 beam_pc_rearrangements[bi].rearrange()
+                obj_poses_pattern = []
+                for gpose in beam_pc_rearrangements[bi].goal_poses["obj_poses"]:
+                    # gpose = gpose.detach().cpu().numpy()
+                    goal_pose = np.eye(4)
+                    goal_pose[:3, 3] = gpose[:3]
+                    print("translation:", gpose[:3])
+                    goal_pose[:3, :3] = np.array(gpose[3:]).reshape(3, 3)   
+                    assert np.allclose(np.linalg.det(goal_pose[:3, :3]), 1.0)
+                    obj_poses_pattern.append(goal_pose)                                                
+                print("---------------------------------------\n")
+                obj_poses_pattern = np.vstack(obj_poses_pattern)
+                # get the up most and low most points first"""
+                # lo_idx = np.argmax(obj_poses_pattern[:, 1], axis=-1)
+                # hi_idx = np.argmin(obj_poses_pattern[:, 1], axis=-1)
+                # lo_pose = obj_poses_pattern[lo_idx, :2]
+                # hi_pose = obj_poses_pattern[hi_idx, :2]
 
+                lo_idx = np.argmax(obj_poses_pattern[:, 0], axis=0)
+                hi_idx = np.argmin(obj_poses_pattern[:, 0], axis=0)
+                lo_pose = obj_poses_pattern[lo_idx, [0, 2]]
+                hi_pose = obj_poses_pattern[hi_idx, [0, 2]]
+                
+                k = (hi_pose - lo_pose) / np.linalg.norm(hi_pose - lo_pose)
+                o = hi_pose
+                threshold = 0.1 
+                # dists = dist_p2l(obj_poses_pattern[:, :2], o[None, :], k[None, :])
+                dists = dist_p2l(obj_poses_pattern[:, [0, 2]], o[None, :], k[None, :])
+                pattern_dists.append(np.max(dists))
+                status = not (np.max(dists) > threshold)
+                if not status:
+                    print("Max Dist:", np.max(dists), "status:", status)
+                    pass
+                
+                # print("goal pose:", gpose)
             ############################################
             if visualize:
                 for pc_rearrangement in beam_pc_rearrangements:
+                    # print("I am here at 250")
+                    # Commenting out for now
+                    pc_rearrangement.visualize("goal", add_other_objects=False,
+                                               add_coordinate_frame=True, side_view=False, add_table=False)
                     pc_rearrangement.visualize("goal", add_other_objects=True,
-                                               add_coordinate_frame=False, side_view=True, add_table=True)
-
+                                               add_coordinate_frame=True, side_view=False, add_table=False)
+                    pass
             if inference_visualization_dir:
                 for pc_rearrangement in beam_pc_rearrangements:
+                    # print("I am here at 255")
                     pc_rearrangement.visualize("goal", add_other_objects=True,
-                                               add_coordinate_frame=False, side_view=True, add_table=True,
+                                               add_coordinate_frame=False, side_view=False, add_table=False,
                                                save_vis=True,
                                                save_filename=os.path.join(inference_visualization_dir, "{}.jpg".format(scene_id)))
 

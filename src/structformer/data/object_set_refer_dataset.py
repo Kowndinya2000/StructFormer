@@ -93,38 +93,44 @@ class ObjectSetReferDataset(torch.utils.data.Dataset):
         small_H, small_W = (np.array([H, W]) / gp_rescale_factor).astype(int)
         additive_noise = np.random.normal(loc=0.0, scale=gp_scale, size=(small_H, small_W, C))
         additive_noise = cv2.resize(additive_noise, (W, H), interpolation=cv2.INTER_CUBIC)
-        xyz_img[depth_img > 0, :] += additive_noise[depth_img > 0, :]
+        depth_img2d = depth_img.squeeze(axis=2)
+        mask = depth_img2d > 0
+        xyz_img[mask, :] += additive_noise[mask, :]
+        # xyz_img[depth_img > 0, :] += additive_noise[depth_img > 0, :]
         return xyz_img
 
-    def _get_rgb(self, h5, idx, ee=True):
+    def _get_rgb(self, h5, idx, ee=False):
         RGB = "ee_rgb" if ee else "rgb"
         rgb1 = img.PNGToNumpy(h5[RGB][idx])[:, :, :3] / 255.  # remove alpha
         return rgb1
 
-    def _get_depth(self, h5, idx, ee=True):
+    def _get_depth(self, h5, idx, ee=False):
         DEPTH = "ee_depth" if ee else "depth"
 
-    def _get_images(self, h5, idx, ee=True):
+    def _get_images(self, h5, idx, ee=False):
         if ee:
             RGB, DEPTH, SEG = "ee_rgb", "ee_depth", "ee_seg"
             DMIN, DMAX = "ee_depth_min", "ee_depth_max"
         else:
             RGB, DEPTH, SEG = "rgb", "depth", "seg"
             DMIN, DMAX = "depth_min", "depth_max"
-        dmin = h5[DMIN][idx]
-        dmax = h5[DMAX][idx]
+        idx = 1 if idx > 1 else idx
+        dmin = h5[DMIN][0]
+        dmax = h5[DMAX][0]
         rgb1 = img.PNGToNumpy(h5[RGB][idx])[:, :, :3] / 255.  # remove alpha
         depth1 = h5[DEPTH][idx] / 20000. * (dmax - dmin) + dmin
         seg1 = img.PNGToNumpy(h5[SEG][idx])
 
-        valid1 = np.logical_and(depth1 > 0.1, depth1 < 2.)
+        # valid1 = np.logical_and(depth1 > 0.1, depth1 < 2.) # TODO: Modifying to True for now
+        valid1 = np.logical_and(True, True)
 
         # proj_matrix = h5['proj_matrix'][()]
         camera = cam.get_camera_from_h5(h5)
         if self.data_augmentation:
             depth1 = self.add_noise_to_depth(depth1)
 
-        xyz1 = cam.compute_xyz(depth1, camera)
+        # xyz1 = cam.compute_xyz(depth1, camera)
+        xyz1 = h5["scene_point_cloud"][idx]
         if self.data_augmentation:
             xyz1 = self.add_noise_to_xyz(xyz1, depth1)
 
@@ -141,7 +147,7 @@ class ObjectSetReferDataset(torch.utils.data.Dataset):
         # Get transformed point cloud
         h, w, d = xyz1.shape
         xyz1 = xyz1.reshape(h * w, -1)
-        xyz1 = trimesh.transform_points(xyz1, cam_pose)
+        # xyz1 = trimesh.transform_points(xyz1, cam_pose)
         xyz1 = xyz1.reshape(h, w, -1)
 
         scene1 = rgb1, depth1, seg1, valid1, xyz1
@@ -167,8 +173,7 @@ class ObjectSetReferDataset(torch.utils.data.Dataset):
     def get_data_index(self, idx):
         return self.arrangement_data[idx]
 
-    def prepare_test_data(self, obj_xyzs, obj_rgbs, goal_specification, structure_parameters, gt_num_rearrange_objects):
-
+    def prepare_test_data(self, obj_xyzs, obj_rgbs, goal_specification, structure_parameters, gt_num_rearrange_objects):      
         # getting object point clouds
         object_pad_mask = []
         rearrange_obj_labels = []
@@ -219,18 +224,18 @@ class ObjectSetReferDataset(torch.utils.data.Dataset):
         # rearrange
         for tf in goal_specification["rearrange"]["features"]:
             comparator = tf["comparator"]
-            type = tf["type"]
+            comparator_type = tf["type"]
             value = tf["value"]
             if comparator is None:
                 # discrete features
                 if is_anchor:
                     # leave the desired value to be inferred from anchor
-                    sentence.append(("MASK", type))
+                    sentence.append(("MASK", comparator_type))
                 else:
-                    sentence.append((value, type))
+                    sentence.append((value, comparator_type))
             else:
                 # continous features
-                sentence.append((comparator, type))
+                sentence.append((comparator, comparator_type))
             sentence_pad_mask.append(0)
         # pad, because we always have the fixed length, we don't need to pad this part of the sentence
         assert len(goal_specification["rearrange"]["features"]) == self.max_num_rearrange_features
@@ -238,10 +243,10 @@ class ObjectSetReferDataset(torch.utils.data.Dataset):
         # anchor
         for tf in goal_specification["anchor"]["features"]:
             assert tf["comparator"] is None
-            type = tf["type"]
+            comparator_type = tf["type"]
             value = tf["value"]
             # discrete features
-            sentence.append((value, type))
+            sentence.append((value, comparator_type))
             sentence_pad_mask.append(0)
         # pad
         for i in range(self.max_num_anchor_features - len(goal_specification["anchor"]["features"])):
@@ -250,8 +255,8 @@ class ObjectSetReferDataset(torch.utils.data.Dataset):
 
         ###################################
         if self.debug:
-            print(goal_specification)
-            print("sentence:", sentence)
+            # print(goal_specification)
+            # print("sentence:", sentence)
             # plt.figure()
             # plt.imshow(rgb)
             # plt.show()
@@ -288,14 +293,15 @@ class ObjectSetReferDataset(torch.utils.data.Dataset):
         ids = self._get_ids(h5)
         # moved_objs = h5['moved_objs'][()].split(',')
         all_objs = sorted([o for o in ids.keys() if "object_" in o])
-        goal_specification = json.loads(str(np.array(h5["goal_specification"])))
+        json_string = str(np.array(h5["goal_specification"]))[2:-1]
+        goal_specification = json.loads(json_string)
         num_rearrange_objs = len(goal_specification["rearrange"]["objects"])
         # all_object_specs = goal_specification["rearrange"]["objects"] + goal_specification["anchor"]["objects"] + \
         #                    goal_specification["distract"]["objects"]
 
         ###################################
         # getting scene images and point clouds
-        scene = self._get_images(h5, t, ee=True)
+        scene = self._get_images(h5, t, ee=False)
         rgb, depth, seg, valid, xyz = scene
 
         # getting object point clouds
@@ -304,18 +310,25 @@ class ObjectSetReferDataset(torch.utils.data.Dataset):
         object_pad_mask = []
         rearrange_obj_labels = []
         for i, obj in enumerate(all_objs):
-            obj_mask = np.logical_and(seg == ids[obj], valid)
+            # obj_mask = np.logical_and(seg == ids[obj], valid)
+            # Kowndinya TODO: Modifying to True of shape valid for now
+            # Create a mask of all True values of shape valid 
+            obj_mask = np.logical_or(seg == ids[obj], True)       
+            # obj_mask = np.logical_and(True, valid)
+            # print(obj_mask.shape)
             if np.sum(obj_mask) <= 0:
+                print("Warning: object {} is not in the scene".format(obj))
+                # continue
                 raise Exception
             ok, obj_xyz, obj_rgb, _ = get_pts(xyz, rgb, obj_mask, num_pts=self.num_pts)
             obj_xyzs.append(obj_xyz)
+            # print("obj_xyzs_shape:", obj_xyz.shape)
             obj_rgbs.append(obj_rgb)
             object_pad_mask.append(0)
             if i < num_rearrange_objs:
                 rearrange_obj_labels.append(1.0)
             else:
                 rearrange_obj_labels.append(0.0)
-
         # pad data
         for i in range(self.max_num_objects - len(all_objs)):
             obj_xyzs.append(torch.zeros([1024, 3], dtype=torch.float32))
@@ -353,45 +366,76 @@ class ObjectSetReferDataset(torch.utils.data.Dataset):
             sentence_pad_mask.append(1)
 
         # object selection
-        is_anchor = len(goal_specification["anchor"]["features"]) > 0
+        is_anchor = len(goal_specification["anchor"]["objects"]) > 0        
         # rearrange
-        for tf in goal_specification["rearrange"]["features"]:
-            comparator = tf["comparator"]
-            type = tf["type"]
-            value = tf["value"]
-            if comparator is None:
-                # discrete features
-                if is_anchor:
-                    # leave the desired value to be inferred from anchor
-                    sentence.append(("MASK", type))
+        if not isinstance(goal_specification["rearrange"]["features"], list):
+            for tf in [goal_specification["rearrange"]["features"]]:
+                comparator = tf["comparator"]
+                comparator_type = tf["type"]
+                value = tf["value"]
+                if comparator is None:
+                    # discrete features
+                    if is_anchor:
+                        # leave the desired value to be inferred from anchor
+                        sentence.append(("MASK", comparator_type))
+                    else:
+                        sentence.append((value, comparator_type))
                 else:
-                    sentence.append((value, type))
-            else:
-                # continous features
-                sentence.append((comparator, type))
-            sentence_pad_mask.append(0)
-        # pad, because we always have the fixed length, we don't need to pad this part of the sentence
-        assert len(goal_specification["rearrange"]["features"]) == self.max_num_rearrange_features
+                    # continous features
+                    sentence.append((comparator, comparator_type))
+                sentence_pad_mask.append(0)
+            # pad, because we always have the fixed length, we don't need to pad this part of the sentence
+            assert len([goal_specification["rearrange"]["features"]]) == self.max_num_rearrange_features
+        else:
+            for tf in goal_specification["rearrange"]["features"]:
+                comparator = tf["comparator"]
+                comparator_type = tf["type"]
+                value = tf["value"]
+                if comparator is None:
+                    # discrete features
+                    if is_anchor:
+                        # leave the desired value to be inferred from anchor
+                        sentence.append(("MASK", comparator_type))
+                    else:
+                        sentence.append((value, comparator_type))
+                else:
+                    # continous features
+                    sentence.append((comparator, comparator_type))
+                sentence_pad_mask.append(0)
+            # pad, because we always have the fixed length, we don't need to pad this part of the sentence
+            assert len(goal_specification["rearrange"]["features"]) == self.max_num_rearrange_features
 
         # anchor
-        for tf in goal_specification["anchor"]["features"]:
-            assert tf["comparator"] is None
-            type = tf["type"]
-            value = tf["value"]
-            # discrete features
-            sentence.append((value, type))
-            sentence_pad_mask.append(0)
-        # pad
-        for i in range(self.max_num_anchor_features - len(goal_specification["anchor"]["features"])):
-            sentence.append(tuple(["PAD"]))
-            sentence_pad_mask.append(1)
-
+        if not isinstance(goal_specification["anchor"]["features"], list):
+            for tf in [goal_specification["anchor"]["features"]]:
+                assert tf["comparator"] is None
+                comparator_type = tf["type"]
+                value = tf["value"]
+                # discrete features
+                sentence.append((value, comparator_type))
+                sentence_pad_mask.append(0)
+            # pad
+            for i in range(self.max_num_anchor_features - len([goal_specification["anchor"]["features"]])):
+                sentence.append(tuple(["PAD"]))
+                sentence_pad_mask.append(1)
+        else:
+            for tf in goal_specification["anchor"]["features"]:
+                assert tf["comparator"] is None
+                comparator_type = tf["type"]
+                value = tf["value"]
+                # discrete features
+                sentence.append((value, comparator_type))
+                sentence_pad_mask.append(0)
+            # pad
+            for i in range(self.max_num_anchor_features - len(goal_specification["anchor"]["features"])):
+                sentence.append(tuple(["PAD"]))
+                sentence_pad_mask.append(1)
         ###################################
         if self.debug:
-            print("all objects:", all_objs)
-            print(goal_specification)
-            print("sentence:", sentence)
-            print(self.tokenizer.convert_to_natural_sentence(sentence[5:]))
+            # print("all objects:", all_objs)
+            # print(goal_specification)
+            # print("sentence:", sentence)
+            # print(self.tokenizer.convert_to_natural_sentence(sentence[5:]))
             # plt.figure()
             # plt.imshow(rgb)
             # plt.show()
@@ -400,6 +444,7 @@ class ObjectSetReferDataset(torch.utils.data.Dataset):
 
         # used to indicate whether the token is an object point cloud or a part of the instruction
         assert self.max_num_rearrange_features + self.max_num_anchor_features + self.max_num_shape_parameters == len(sentence)
+        # print(self.max_num_objects, len(rearrange_obj_labels))
         assert self.max_num_objects == len(rearrange_obj_labels)
         token_type_index = [0] * len(sentence) + [1] * self.max_num_objects
         position_index = list(range(len(sentence))) + [i for i in range(self.max_num_objects)]
@@ -484,7 +529,7 @@ if __name__ == "__main__":
     dataset = ObjectSetReferDataset(data_roots=["/home/weiyu/data_drive/data_new_objects/examples_circle_new_objects/result"],
                                     index_roots=["index_34k"],
                                     split="train", tokenizer=tokenizer,
-                                    max_num_all_objects=11,
+                                    max_num_all_objects=9,
                                     max_num_shape_parameters=5,
                                     max_num_rearrange_features=1,
                                     max_num_anchor_features=3,

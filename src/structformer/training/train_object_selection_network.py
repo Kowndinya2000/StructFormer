@@ -298,7 +298,7 @@ def run_model(cfg):
     data_cfg = cfg.dataset
     tokenizer = Tokenizer(data_cfg.vocab_dir)
     vocab_size = tokenizer.get_vocab_size()
-
+    
     train_dataset = ObjectSetReferDataset(data_cfg.dirs, data_cfg.index_dirs, "train", tokenizer,
                                           data_cfg.max_num_all_objects,
                                           data_cfg.max_num_shape_parameters,
@@ -349,8 +349,8 @@ def run_model(cfg):
         print("Saving model to {}".format(model_dir))
         if not os.path.exists(model_dir):
             os.makedirs(model_dir)
-        save_model(model_dir, cfg, cfg.max_epochs, model, optimizer, scheduler)
-
+        save_model(model_dir, cfg, cfg.training.max_epochs, model, optimizer, scheduler)
+        
 
 if __name__ == "__main__":
 
