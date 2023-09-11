@@ -251,7 +251,7 @@ def inference_beam_decoding(model_dir, dirs_cfg, beam_size=100, max_scene_decode
             # move pc
             for bi in range(beam_size):
                 beam_pc_rearrangements[bi].set_goal_poses(beam_goal_struct_pose[bi], beam_goal_obj_poses[bi])
-                beam_pc_rearrangements[bi].rearrange()
+                beam_pc_rearrangements[bi].rearrange() 
                 obj_poses_pattern = []
                 for gpose in beam_pc_rearrangements[bi].goal_poses["obj_poses"]:
                     # gpose = gpose.detach().cpu().numpy()

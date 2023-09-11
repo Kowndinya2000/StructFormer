@@ -457,7 +457,7 @@ def move_one_object_pc(obj_xyz, obj_rgb, object_params, struct_params=None, eule
     obj_center = torch.mean(obj_xyz, dim=0)
     t[:3, 3] = [object_params[0] - obj_center[0], object_params[1] - obj_center[1], object_params[2] - obj_center[2]]
     new_obj_xyz = trimesh.transform_points(obj_xyz, t)
-
+    
     # rotate in place
     R = R_obj 
     # R = np.eye(4)
@@ -465,14 +465,19 @@ def move_one_object_pc(obj_xyz, obj_rgb, object_params, struct_params=None, eule
     centered_obj_xyz = new_obj_xyz - obj_center
     new_centered_obj_xyz = trimesh.transform_points(centered_obj_xyz, R, translate=True)
     new_obj_xyz = new_centered_obj_xyz + obj_center # Commented by Kowndinya for now
-
+    
+    
+    
     if struct_params is not None:
         # transform to the global frame from the structure frame
         new_obj_xyz = trimesh.transform_points(new_obj_xyz, T_struct)
 
     # convert back to torch
     new_obj_xyz = torch.tensor(new_obj_xyz, dtype=obj_xyz.dtype)
-
+    
+    # pc_rearrangement.visualize("goal", add_other_objects=True,
+    #                                            add_coordinate_frame=True, side_view=False, add_table=False)
+    
     return new_obj_xyz, obj_rgb
 
 
@@ -995,9 +1000,9 @@ def evaluate_prior_prediction(gts, predictions, keys, debug=False):
             print("Predictions")
             print(predictions_for_key[:100])
 
-        print("{} ME for {} objects: {}".format(key, num_objects, me))
-        print("{} MSE for {} objects: {}".format(key, num_objects, mse))
-        print("{} MEDIAN for {} objects: {}".format(key, num_objects, med))
+        # print("{} ME for {} objects: {}".format(key, num_objects, me))
+        # print("{} MSE for {} objects: {}".format(key, num_objects, mse))
+        # print("{} MEDIAN for {} objects: {}".format(key, num_objects, med))
         total_mses += mse
 
         if "theta" in key:
@@ -1008,23 +1013,23 @@ def evaluate_prior_prediction(gts, predictions, keys, debug=False):
             mgd = torch.mean(geodesic_distance)
             stdgd = torch.std(geodesic_distance)
             megd = torch.median(geodesic_distance)
-            print("{} Mean and std Geodesic Distance for {} objects: {} +- {}".format(key, num_objects, mgd, stdgd))
-            print("{} Median Geodesic Distance for {} objects: {}".format(key, num_objects, megd))
+            # print("{} Mean and std Geodesic Distance for {} objects: {} +- {}".format(key, num_objects, mgd, stdgd))
+            # print("{} Median Geodesic Distance for {} objects: {}".format(key, num_objects, megd))
 
     if obj_dists:
         euclidean_dists = torch.sqrt(obj_dists[0]**2 + obj_dists[1]**2 + obj_dists[2]**2)
         me = torch.mean(euclidean_dists)
         stde = torch.std(euclidean_dists)
         med = torch.median(euclidean_dists)
-        print("Mean and std euclidean dist for {} objects: {} +- {}".format(len(euclidean_dists), me, stde))
-        print("Median euclidean dist for {} objects: {}".format(len(euclidean_dists), med))
+        # print("Mean and std euclidean dist for {} objects: {} +- {}".format(len(euclidean_dists), me, stde))
+        # print("Median euclidean dist for {} objects: {}".format(len(euclidean_dists), med))
     if struct_dists:
         euclidean_dists = torch.sqrt(struct_dists[0] ** 2 + struct_dists[1] ** 2 + struct_dists[2] ** 2)
         me = torch.mean(euclidean_dists)
         stde = torch.std(euclidean_dists)
         med = torch.median(euclidean_dists)
-        print("Mean euclidean dist for {} structures: {} +- {}".format(len(euclidean_dists), me, stde))
-        print("Median euclidean dist for {} structures: {}".format(len(euclidean_dists), med))
+        # print("Mean euclidean dist for {} structures: {} +- {}".format(len(euclidean_dists), me, stde))
+        # print("Median euclidean dist for {} structures: {}".format(len(euclidean_dists), med))
 
     return -total_mses
 

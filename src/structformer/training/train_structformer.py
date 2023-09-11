@@ -121,7 +121,7 @@ def train_model(cfg, model, data_iter, optimizer, warmup, num_epochs, device, sa
                         # offset[:3, 3] = trans_offset
                         # rot_new = goal_pose[:3, :3] @ rotation_offset
                         # trans_new = goal_pose[:3, :3] @ trans_offset + goal_pose[:3, 3]
-                        # goal_pose[:3, :3] = rot_new
+                        # goal_pose[:3, :3] = rot_new 
                         # goal_pose[:3, 3] = trans_new 
                         goal_pose[:3, 3] = trans_offset
                         # + obj_theta_inputs[num, ind].reshape(3, 3).detach().numpy()
